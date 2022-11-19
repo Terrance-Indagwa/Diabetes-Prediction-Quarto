@@ -1,0 +1,227 @@
+---
+title: "Diabetes Prediction"
+author: "Indagwa Terrance"
+date: "19th Nov. 2022"
+format: 
+  html:
+    code-fold: true
+    
+execute: 
+  cache: true
+jupyter: python3
+
+echo: false
+---
+
+# Introduction
+"This dataset is originally from the National Institute of Diabetes and Digestive and Kidney Diseases. The objective of the dataset is to diagnostically predict whether a patient has diabetes, based on certain diagnostic measurements included in the dataset."\ https://www.kaggle.com/datasets/akshaydattatraykhare/diabetes-dataset
+
+Features include pregnancies, glucose, blood pressure, skin thickness, insulin, BMI, Diabetes Pedigree Function (assumed to be a measure of genetic predisposition), and age. The outcome column has values of 1 or 0, representing whether or not the patient has diabetes.
+
+This analysis was conducted using [Rstudio IDE](http://posit.co) and [Quarto](https://quarto.org) engine to produce flexible report.
+
+# Aims
+
+- Check and clean the data
+- Perform explanatory data analysis
+- Build machine learning model to predict whether a patient has diabetes or not.
+
+
+# Libraries
+
+```{python}
+import numpy as np
+import pandas as pd # for data I/O, processing 
+import matplotlib.pyplot as plt #visualization
+import seaborn as sn # visualization
+
+
+from sklearn.linear_model import LogisticRegression as logit
+from sklearn.model_selection import train_test_split as trainSplit
+from sklearn.metrics import classification_report, confusion_matrix, accuracy_score
+import scipy
+
+
+# Ignore warnings
+import warnings
+warnings.filterwarnings('ignore')
+
+
+```
+
+
+# Data
+
+```{python}
+df= pd.read_csv("~/Library/CloudStorage/OneDrive-Personal/PYTHON CLASSES/diabetes/diabetes.csv")
+
+
+df.info()  #There are no missing values in our data
+
+df.head()
+```
+
+
+Since our data looks clean. However, doing a little research, its impossible for a person to have 0 bloodpressure, 0 skinthikness, 0 insulin, 0 BMI and 0 Glucose levels hence this can be treated as missing values.
+
+```{python}
+df['Glucose'].replace(to_replace=0, value=np.NAN, inplace=True)
+df['Insulin'].replace(to_replace=0, value=np.NaN, inplace=True)
+df['BMI'].replace(to_replace=0, value=np.NaN, inplace=True)
+df['BloodPressure'].replace(to_replace=0, value=np.NaN, inplace=True)
+df['SkinThickness'].replace(to_replace=0, value=np.NaN, inplace=True)
+
+```
+
+Lets check now the distribution of missing values
+
+```{python}
+sn.heatmap(df.isnull(), yticklabels=False, cbar=False, cmap='viridis')
+```
+Looking at the heat map we can see SkinThickness and Insulin have the highest missing values hence we will have to drop them in future. For now we impute Glucose, bloodpressure and BMI with there means. 
+
+```{python}
+df['Glucose']=df.Glucose.fillna(df.Glucose.mean())
+df['BloodPressure']=df.BloodPressure.fillna(df.Glucose.mean())
+df['BMI']=df.Glucose.fillna(df.BMI.mean())
+
+
+sn.heatmap(df.isnull(), yticklabels=False, cbar=False, cmap='viridis')
+
+```
+Looks we have eliminated the missing values targeted.
+
+
+```{python}
+sn.heatmap(df.corr())
+
+df.corr()
+```
+
+Here we see Pregnancy is highly correlated with age, insulin and glucose is also correlated and glucose is fairly correlated with outcome. Hence, glucose would greatly affect the diabetes outcome.
+
+# Data Visualization
+
+## Correlations
+```{python}
+#| fig-cap: Age and pregnancy correlation
+#| fig-cap-location: bottom
+
+
+agePreg=sn.relplot(x='Age', y='Pregnancies',data=df, kind="line", errorbar=None)
+
+
+```
+
+The number of pregnancy tend to increase upto the age of around 45 then henceforth it becomes inconsistent and do not have a clear pattern.
+
+
+```{python}
+#| fig-cap: Insulin & Glucose correlation
+#| fig-cap-location: bottom
+
+
+agePreg=sn.relplot(y='Insulin', x='Glucose',data=df, kind="line", errorbar=None)
+
+
+```
+
+There seems to be a steady positive correlation of glucose and insulin with high levels of glucose causing unpredictable insulin levels.
+
+
+
+```{python}
+#| fig-cap: Insulin & Glucose correlation
+#| fig-cap-location: bottom
+
+
+agePreg=sn.relplot(y='Insulin', x='Glucose',data=df,hue="Outcome")
+
+
+```
+
+High levels of glucose and insulin is associated with presence of diabetes 
+
+```{python}
+#| fig-cap: Insulin & Glucose correlation
+#| fig-subcap: Dropped Insulin & SkinThickness
+#| fig-cap-location: bottom
+
+df.drop('SkinThickness', axis=1, inplace=True)
+df.drop('Insulin', axis=1, inplace=True)
+
+sn.heatmap(df.isnull(), yticklabels=False, cbar=False, cmap='viridis')
+```
+
+# Modelling
+
+Data mungling for modelling
+```{python}
+x=df.drop("Outcome", axis=1)
+y=df["Outcome"]
+
+
+xtrain, xtest, ytrain, ytest=trainSplit(x,y, test_size=0.2, random_state=0)
+```
+
+## Logistic regression
+```{python}
+
+log=logit(max_iter=200, random_state=1)
+log.fit(xtrain, ytrain)
+
+preds=log.predict(xtest)
+
+print(classification_report(ytest, preds))
+accuracy_score(ytest, preds)
+```
+
+From the logistic regression, we see our model is generally `80%` accurate with a precision of `84%` accurately predicting no diabetes and `71%` presence of diabetes.
+
+## SVM
+```{python}
+from sklearn.svm import SVC
+
+class2=SVC(kernel="rbf", random_state=1)
+class2.fit(xtrain, ytrain)
+svmPreds=class2.predict(xtest)
+
+print(classification_report(ytest, svmPreds))
+accuracy_score(ytest, svmPreds)
+
+print(confusion_matrix(ytest, svmPreds))
+```
+
+The precision level for SVM is lower (`78%`) compared to logistic regression.
+
+## KNN model
+
+```{python}
+from sklearn.neighbors import KNeighborsClassifier as knn
+
+knn=knn(n_neighbors=5)
+knn.fit(xtrain, ytrain)
+
+knnPreds=knn.predict(xtest)
+
+print(classification_report(ytest, knnPreds))
+accuracy_score(ytest, knnPreds)
+```
+The precision level for KNN is lower (`77%`) compared to logistic regression.
+
+
+## Random Forest
+
+```{python}
+from sklearn.ensemble import RandomForestClassifier as forest
+forest = forest(n_estimators=10, random_state=1)
+forest.fit(xtrain, ytrain)
+forestPreds = forest.predict(xtest)
+print(classification_report(ytest, forestPreds))
+accuracy_score(forestPreds, ytest)
+
+```
+The precision level for KNN is lower (`79%`) compared to logistic regression.
+
+
+Hence, logistic regression is was the best modelling technique.Where confusion matrix shows that 97 patients from the test set were correctly predicted as having diabetes, and 23 were correctly predicted as not having diabetes. There were 10 false negatives and 24 false positives. 
